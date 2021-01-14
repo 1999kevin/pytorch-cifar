@@ -12,6 +12,7 @@ import os
 import argparse
 
 from models import *
+from Cifar import *
 # from utils import progress_bar
 
 
@@ -24,6 +25,12 @@ args = parser.parse_args()
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+training_epoch = 230
+loading_path = './checkpoint/ckpt.pth'
+saving_path = './checkpoint/resnet18-ckpt.pth'
+
+print("total training epochs in this script:", training_epoch)
+print("saving path: ", saving_path)
 
 # Data
 print('==> Preparing data..')
@@ -39,29 +46,35 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.CIFAR10(
-    root='./data', train=True, download=False, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=32, shuffle=True, num_workers=0)
+# trainset = torchvision.datasets.CIFAR10(
+#     root='./data', train=True, download=False, transform=transform_train)
+# trainloader = torch.utils.data.DataLoader(
+#     trainset, batch_size=32, shuffle=True, num_workers=0)
+#
+# testset = torchvision.datasets.CIFAR10(
+#     root='./data', train=False, download=False, transform=transform_test)
+# testloader = torch.utils.data.DataLoader(
+#     testset, batch_size=32, shuffle=False, num_workers=0)
 
-testset = torchvision.datasets.CIFAR10(
-    root='./data', train=False, download=False, transform=transform_test)
-testloader = torch.utils.data.DataLoader(
-    testset, batch_size=32, shuffle=False, num_workers=0)
+trainset = cifar_train
+trainloader = cifar_train_batch
+testset = cifar_test
+testloader = cifar_test_batch
+
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
-
+print("net: ResNet18")
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-# net = ResNet18()
+net = ResNet18(11)
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
 # net = ResNeXt29_2x64d()
-net = MobileNet()
-# net = MobileNetV2()
+# net = MobileNet()
+# net = MobileNetV2(11)
 # net = DPN92()
 # net = ShuffleNetG2()
 # net = SENet18()
@@ -77,8 +90,9 @@ if device == 'cuda':
 if args.resume:
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
+    print("loading path: ", loading_path)
     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.pth')
+    checkpoint = torch.load(loading_path)
     net.load_state_dict(checkpoint['net'])
     best_acc = checkpoint['acc']
     start_epoch = checkpoint['epoch']
@@ -111,7 +125,8 @@ def train(epoch):
 
         # progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
         #              % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    print('Loss: %.3f | Acc: %.3f%% (%d/%d)', (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+    # print('Loss:',train_loss/(batch_idx+1),' Acc: ', 100.*correct/total, correct, '/', total)
+    print('Loss: %f, Acc: %f%% = %d / %d' %(train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
 
 def test(epoch):
@@ -130,9 +145,8 @@ def test(epoch):
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
-        print('Loss: %.3f | Acc: %.3f%% (%d/%d)',
-                (test_loss / (batch_idx + 1), 100. * correct / total, correct, total))
-
+        # print('Loss:', test_loss / (batch_idx + 1), ' Acc: ', 100. * correct / total, correct, '/', total)
+        print('Loss: %f, Acc: %f%% = %d / %d' % (test_loss / (batch_idx + 1), 100. * correct / total, correct, total))
             # progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             #              % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
@@ -147,11 +161,11 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.pth')
+        torch.save(state, saving_path)
         best_acc = acc
 
 
-for epoch in range(start_epoch, start_epoch+200):
+for epoch in range(start_epoch, start_epoch+training_epoch):
     train(epoch)
     test(epoch)
     scheduler.step()
